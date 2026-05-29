@@ -6,6 +6,7 @@ use App\Application\UseCase\ListarAsistenciasUseCase;
 use App\Application\UseCase\SincronizarAsistenciasUseCase;
 use App\Application\UseCase\ExportarExcelUseCase;
 use App\Application\UseCase\BuscarAsistenciasUseCase;
+use App\Domain\Model\Asistencia\AsistenciaRepositorio;
 
 /**
  * Controlador HTTP para gestionar las peticiones de asistencia.
@@ -16,7 +17,8 @@ class AsistenciaController
         private ListarAsistenciasUseCase $listarUseCase,
         private SincronizarAsistenciasUseCase $sincronizarUseCase,
         private ExportarExcelUseCase $exportarUseCase,
-        private BuscarAsistenciasUseCase $buscarUseCase
+        private BuscarAsistenciasUseCase $buscarUseCase,
+        private AsistenciaRepositorio $repositorio
     ) {}
 
     /**
@@ -101,6 +103,46 @@ class AsistenciaController
     }
 
     /**
+     * Obtiene la configuración general y la lista de empleados con sus horarios.
+     */
+    public function obtenerConfiguracion(): void
+    {
+        try {
+            $general = $this->repositorio->obtenerGeneralConfig();
+            $empleados = $this->repositorio->obtenerEmpleadosConfig();
+
+            $this->jsonResponse(200, [
+                'jornadas' => $general['jornadas'] ?? [],
+                'tolerancia_minutos' => (int)($general['tolerancia_minutos'] ?? 20),
+                'empleados' => $empleados
+            ]);
+        } catch (\Exception $e) {
+            $this->jsonResponse(500, ['error' => 'Error al obtener la configuración: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Guarda la configuración de la empresa y empleados.
+     */
+    public function guardarConfiguracion(array $bodyParams): void
+    {
+        $configData = [
+            'jornadas' => $bodyParams['jornadas'] ?? [],
+            'tolerancia_minutos' => (int)($bodyParams['tolerancia_minutos'] ?? 20)
+        ];
+        $empleados = $bodyParams['empleados'] ?? [];
+
+        try {
+            $this->repositorio->guardarGeneralConfig($configData);
+            $this->repositorio->guardarEmpleadosConfig($empleados);
+
+            $this->jsonResponse(200, ['mensaje' => 'Configuración guardada correctamente']);
+        } catch (\Exception $e) {
+            $this->jsonResponse(500, ['error' => 'Error al guardar la configuración: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
      * Autentica al usuario administrador y devuelve un token JWT.
      */
     public function login(array $bodyParams): void
@@ -151,5 +193,39 @@ class AsistenciaController
         http_response_code($statusCode);
         echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         exit;
+    }
+
+    public function proxyFoto(array $vars): void
+    {
+        $employeeNo = $vars['id'] ?? '';
+        if (empty($employeeNo)) {
+            http_response_code(400);
+            echo "ID requerido";
+            return;
+        }
+
+        $biometricUrl = getenv('BIOMETRIC_URL') ?: 'http://190.145.135.122:8547/ISAPI/AccessControl/AcsEvent?format=json';
+        $biometricUser = \App\Infrastructure\Config\CryptoHelper::desencriptar(getenv('BIOMETRIC_USER') ?: 'admin');
+        $biometricPass = \App\Infrastructure\Config\CryptoHelper::desencriptar(getenv('BIOMETRIC_PASS') ?: '900752620ch*');
+        $simulate = (getenv('BIOMETRIC_SIMULATE') === 'true' || getenv('BIOMETRIC_SIMULATE') === '1');
+
+        if ($simulate) {
+            http_response_code(404);
+            return;
+        }
+
+        $cliente = new \App\Infrastructure\Biometric\HikvisionBiometricClient($biometricUrl, $biometricUser, $biometricPass);
+        $fotoBinaria = $cliente->obtenerFotoEmpleado($employeeNo);
+
+        if (!$fotoBinaria) {
+            http_response_code(404);
+            echo "No se encontró fotografía en el biométrico";
+            return;
+        }
+
+        header("Cache-Control: private, max-age=86400");
+        header("Content-Type: image/jpeg");
+        header("Content-Length: " . strlen($fotoBinaria));
+        echo $fotoBinaria;
     }
 }

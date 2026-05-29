@@ -80,6 +80,39 @@ class SincronizarAsistenciasUseCase
             }
         } while ($tieneMasDatos);
 
+        // --- SECCIÓN NUEVA: SINCRONIZACIÓN DE EMPLEADOS (DIRECTORIO) ---
+        try {
+            $empleadosBiometrico = $this->cliente->obtenerEmpleados();
+            if (!empty($empleadosBiometrico)) {
+                $empleadosBD = $this->repositorio->obtenerEmpleadosConfig();
+                $mapaEmpleadosBD = [];
+                foreach ($empleadosBD as $emp) {
+                    $mapaEmpleadosBD[$emp['employeeNo']] = $emp;
+                }
+
+                // Fusionar: mantener configuración existente (como horarios personalizados) pero añadir/actualizar nombres
+                foreach ($empleadosBiometrico as $empBio) {
+                    $id = $empBio['employeeNo'];
+                    if (isset($mapaEmpleadosBD[$id])) {
+                        // Solo actualizamos el nombre si existe, respetamos sus jornadas
+                        $mapaEmpleadosBD[$id]['nombre'] = $empBio['nombre'];
+                    } else {
+                        // Es un empleado nuevo que nunca ha marcado asistencia
+                        $mapaEmpleadosBD[$id] = [
+                            'employeeNo' => $id,
+                            'nombre' => $empBio['nombre'],
+                            'jornadas' => null // Usa horario global por defecto
+                        ];
+                    }
+                }
+                
+                $this->repositorio->guardarEmpleadosConfig(array_values($mapaEmpleadosBD));
+            }
+        } catch (\Exception $e) {
+            // Si falla la extracción de usuarios maestros (quizás por permisos), no interrumpimos la sincro de huellas
+            error_log("No se pudo sincronizar la base de empleados maestros: " . $e->getMessage());
+        }
+
         return $totalSincronizados;
     }
 }

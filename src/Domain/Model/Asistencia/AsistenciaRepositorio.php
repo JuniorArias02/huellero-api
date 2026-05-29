@@ -28,4 +28,25 @@ interface AsistenciaRepositorio
      * Obtiene el último número de serie (serialNo) guardado en el almacén de datos.
      */
     public function obtenerUltimoSerial(): int;
+
+    /**
+     * Obtiene la configuración general (horarios por defecto y tolerancia).
+     */
+    public function obtenerGeneralConfig(): array;
+
+    /**
+     * Guarda la configuración general (días laborables, jornadas, tolerancia).
+     * @param array $configData
+     */
+    public function guardarGeneralConfig(array $configData): void;
+
+    /**
+     * Obtiene la lista de empleados con sus configuraciones de horarios personalizadas.
+     */
+    public function obtenerEmpleadosConfig(): array;
+
+    /**
+     * Guarda las configuraciones personalizadas de horarios para los empleados.
+     */
+    public function guardarEmpleadosConfig(array $empleados): void;
 }

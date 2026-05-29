@@ -57,6 +57,17 @@ class Router
             return;
         }
 
+        if ($method === 'GET' && $path === '/api/configuracion') {
+            $this->controller->obtenerConfiguracion();
+            return;
+        }
+
+        if ($method === 'POST' && $path === '/api/configuracion') {
+            $bodyJson = json_decode(file_get_contents('php://input'), true) ?? [];
+            $this->controller->guardarConfiguracion($bodyJson);
+            return;
+        }
+
         if ($method === 'GET' && ($path === '/api/asistencia/buscar' || $path === '/api/asistencias/buscar')) {
             $this->controller->buscar($queryParams);
             return;
@@ -72,6 +83,13 @@ class Router
 
         if ($method === 'GET' && $path === '/api/exportar') {
             $this->controller->exportar($queryParams);
+            return;
+        }
+
+        // Ruta para proxy de fotografías binarias (usa token por Query Param si se accede desde img src)
+        if ($method === 'GET' && preg_match('#^/api/empleado/([^/]+)/foto$#', $path, $matches)) {
+            $id = $matches[1];
+            $this->controller->proxyFoto(['id' => $id]);
             return;
         }
 

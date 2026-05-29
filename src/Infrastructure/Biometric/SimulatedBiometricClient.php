@@ -97,4 +97,16 @@ class SimulatedBiometricClient implements ClienteBiometrico
             'infoList' => $infoList
         ];
     }
+
+    public function obtenerEmpleados(): array
+    {
+        $empleados = [];
+        foreach ($this->ids as $nombre => $id) {
+            $empleados[] = [
+                'employeeNo' => $id,
+                'nombre' => $nombre
+            ];
+        }
+        return $empleados;
+    }
 }

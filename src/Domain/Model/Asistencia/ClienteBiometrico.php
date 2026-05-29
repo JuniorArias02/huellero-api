@@ -17,4 +17,10 @@ interface ClienteBiometrico
      * @return array ['numOfMatches' => int, 'responseStatusStrg' => string, 'infoList' => array]
      */
     public function consultar(int $posicionActual, string $fechaInicio, string $fechaFin): array;
+
+    /**
+     * Consulta el listado maestro de empleados del biométrico.
+     * @return array de {employeeNo, nombre}
+     */
+    public function obtenerEmpleados(): array;
 }

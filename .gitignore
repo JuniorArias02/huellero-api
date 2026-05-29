@@ -12,3 +12,7 @@ data/*.db
 
 # Logs
 *.log
+
+# Agent Rules
+.agent-rules/
+../.agent-rules/

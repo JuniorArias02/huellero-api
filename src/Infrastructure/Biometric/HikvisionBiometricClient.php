@@ -88,4 +88,99 @@ class HikvisionBiometricClient implements ClienteBiometrico
             'infoList' => $acsEvent['InfoList'] ?? []
         ];
     }
+
+    /**
+     * Extrae el listado maestro de empleados directamente del biométrico.
+     * Retorna un arreglo con [{employeeNo, nombre}]
+     */
+    public function obtenerEmpleados(): array
+    {
+        // Reemplazamos el endpoint en la URL base
+        $baseUrl = preg_replace('#/ISAPI/.*#', '', $this->url);
+        $searchUrl = $baseUrl . '/ISAPI/AccessControl/UserInfo/Search?format=json';
+
+        $queryBody = [
+            "UserInfoSearchCond" => [
+                "searchID" => "1",
+                "searchResultPosition" => 0,
+                "maxResults" => 1000
+            ]
+        ];
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $searchUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($queryBody));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_USERPWD, "{$this->usuario}:{$this->password}");
+        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_DIGEST);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        if (!$response) return [];
+
+        $data = json_decode($response, true);
+        $userInfoList = $data['UserInfoSearch']['UserInfo'] ?? [];
+
+        $empleados = [];
+        foreach ($userInfoList as $user) {
+            $empleados[] = [
+                'employeeNo' => $user['employeeNo'],
+                'nombre' => $user['name'] ?? 'Sin Nombre'
+            ];
+        }
+
+        return $empleados;
+    }
+
+    /**
+     * Intenta extraer la fotografía facial binaria del biométrico.
+     * Retorna el binario JPEG o null si no tiene foto.
+     */
+    public function obtenerFotoEmpleado(string $employeeNo): ?string
+    {
+        $baseUrl = preg_replace('#/ISAPI/.*#', '', $this->url);
+        $searchUrl = $baseUrl . '/ISAPI/AccessControl/FaceInfo/Search?format=json';
+
+        $queryBody = [
+            "FaceInfoSearchCond" => [
+                "searchID" => "1",
+                "searchResultPosition" => 0,
+                "maxResults" => 1,
+                "employeeNo" => $employeeNo
+            ]
+        ];
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $searchUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($queryBody));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_USERPWD, "{$this->usuario}:{$this->password}");
+        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_DIGEST);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        
+        $response = curl_exec($ch);
+        $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+        curl_close($ch);
+
+        if (!$response) return null;
+
+        if (strpos($contentType, 'multipart') !== false) {
+            $jpegStart = strpos($response, "\xFF\xD8\xFF");
+            if ($jpegStart !== false) {
+                $boundaryPos = strpos($response, "\r\n--", $jpegStart);
+                if ($boundaryPos !== false) {
+                    return substr($response, $jpegStart, $boundaryPos - $jpegStart);
+                }
+                return substr($response, $jpegStart);
+            }
+        }
+
+        return null;
+    }
 }

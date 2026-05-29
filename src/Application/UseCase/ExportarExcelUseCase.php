@@ -25,6 +25,7 @@ class ExportarExcelUseCase
     public function ejecutar(?string $fechaInicio = null, ?string $fechaFin = null, ?string $busqueda = null): string
     {
         $registros = $this->repositorio->obtenerTodos($fechaInicio, $fechaFin, $busqueda);
+        $registrosEnriquecidos = \App\Application\Helper\AsistenciaEnricher::enriquecer($registros, $this->repositorio, $fechaInicio, $fechaFin, $busqueda);
 
         // Definimos la cabecera estilizada usando <b> para negrita en SimpleXLSXGen
         $filas = [
@@ -36,46 +37,52 @@ class ExportarExcelUseCase
                 '<b>Modo Verificación</b>', 
                 '<b>Nº Lector</b>', 
                 '<b>Nº Puerta</b>', 
-                '<b>Mayor</b>', 
-                '<b>Menor</b>', 
-                '<b>Mascarilla</b>'
+                '<b>Tipo Registro</b>', 
+                '<b>Hora Prog.</b>', 
+                '<b>Estado</b>', 
+                '<b>Retraso (Min)</b>',
+                '<b>Extra (Min)</b>',
+                '<b>S. Temprana (Min)</b>'
             ]
         ];
 
-        foreach ($registros as $reg) {
+        foreach ($registrosEnriquecidos as $reg) {
             $fechaFormateada = '';
-            if ($reg->getFechaHora()) {
+            if ($reg['fechaHora']) {
                 try {
-                    $dt = new \DateTime($reg->getFechaHora());
+                    $dt = new \DateTime($reg['fechaHora']);
                     $dt->setTimezone(new \DateTimeZone('America/Bogota'));
                     $fechaFormateada = $dt->format('d/m/Y h:i:s A');
                 } catch (\Exception) {
-                    $fechaFormateada = $reg->getFechaHora();
+                    $fechaFormateada = $reg['fechaHora'];
                 }
             }
 
             // Traducimos el modo de verificación a español para un reporte limpio
-            $modo = match(strtolower($reg->getModoVerificacion())) {
+            $modo = match(strtolower($reg['modoVerificacion'])) {
                 'fp' => 'Huella Dactilar',
                 'face' => 'Rostro',
                 'card' => 'Tarjeta',
                 'pw' => 'Contraseña',
                 'faceorfp' => 'Rostro o Huella',
                 'fpandpw' => 'Huella y Contraseña',
-                default => ucfirst($reg->getModoVerificacion())
+                default => ucfirst($reg['modoVerificacion'])
             };
 
             $filas[] = [
-                $reg->getSerialNo(),
-                $reg->getEmployeeNo(),
-                $reg->getNombre(),
+                $reg['serialNo'] < 0 ? '—' : $reg['serialNo'],
+                $reg['employeeNo'],
+                $reg['nombre'],
                 $fechaFormateada,
                 $modo,
-                $reg->getLectorNo(),
-                $reg->getPuertaNo(),
-                $reg->getMajor(),
-                $reg->getMinor(),
-                $reg->getMascarilla()
+                $reg['lectorNo'] > 0 ? $reg['lectorNo'] : '—',
+                $reg['puertaNo'] > 0 ? $reg['puertaNo'] : '—',
+                $reg['tipoRegistro'],
+                $reg['horaProgramada'] ?: 'N/A',
+                $reg['estado'],
+                $reg['retrasoMinutos'] > 0 ? $reg['retrasoMinutos'] : 0,
+                $reg['horasExtrasMinutos'] > 0 ? $reg['horasExtrasMinutos'] : 0,
+                $reg['salidaTempranaMinutos'] > 0 ? $reg['salidaTempranaMinutos'] : 0
             ];
         }
 

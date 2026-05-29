@@ -3,6 +3,7 @@
 namespace App\Application\UseCase;
 
 use App\Domain\Model\Asistencia\AsistenciaRepositorio;
+use App\Application\Helper\AsistenciaEnricher;
 
 /**
  * Caso de Uso para Buscar y Filtrar Asistencias.
@@ -25,8 +26,6 @@ class BuscarAsistenciasUseCase
     {
         $registros = $this->repositorio->obtenerTodos($fechaInicio, $fechaFin, $busqueda);
 
-        return array_map(function($registro) {
-            return $registro->toArray();
-        }, $registros);
+        return AsistenciaEnricher::enriquecer($registros, $this->repositorio, $fechaInicio, $fechaFin, $busqueda);
     }
 }
