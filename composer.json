@@ -1,0 +1,14 @@
+{
+    "name": "junior/asistencia-backend",
+    "description": "Backend en PHP con Arquitectura DDD para el Sistema de Asistencia Biométrica",
+    "type": "project",
+    "require": {
+        "php": ">=8.1",
+        "shuchkin/simplexlsxgen": "^1.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    }
+}

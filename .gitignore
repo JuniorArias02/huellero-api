@@ -1,0 +1,14 @@
+# Composer dependencies
+vendor/
+
+# Environment configurations
+.env
+.env.local
+
+# SQLite Database and local data
+data/*.sqlite
+data/*.db
+!data/.htaccess
+
+# Logs
+*.log
