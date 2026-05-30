@@ -346,4 +346,18 @@ class AsistenciaController
             $this->jsonResponse(500, ['error' => 'Error al cambiar estado: ' . $e->getMessage()]);
         }
     }
+
+    public function sincronizarPersonal(): void
+    {
+        try {
+            $empleados = $this->clienteBiometrico->obtenerTodosLosEmpleados();
+            $this->repositorio->sincronizarEmpleadosConfig($empleados);
+            $this->jsonResponse(200, [
+                'mensaje' => 'Sincronización de personal exitosa',
+                'total_sincronizados' => count($empleados)
+            ]);
+        } catch (\Throwable $e) {
+            $this->jsonResponse(500, ['error' => 'Error Crítico del Servidor: ' . $e->getMessage() . ' en la línea ' . $e->getLine() . ' de ' . basename($e->getFile())]);
+        }
+    }
 }

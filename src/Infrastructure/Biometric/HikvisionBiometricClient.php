@@ -220,10 +220,6 @@ class HikvisionBiometricClient implements ClienteBiometrico
 
     public function modificarEstadoEmpleado(string $employeeNo, string $nombre, bool $activo): bool
     {
-        if ($this->simular) {
-            return true;
-        }
-
         $baseUrl = preg_replace('#/ISAPI/.*#', '', $this->url);
         $modifyUrl = $baseUrl . '/ISAPI/AccessControl/UserInfo/Modify?format=json';
 
@@ -256,5 +252,59 @@ class HikvisionBiometricClient implements ClienteBiometrico
         curl_close($ch);
 
         return $status >= 200 && $status < 300;
+    }
+
+    public function obtenerTodosLosEmpleados(): array
+    {
+        $baseUrl = preg_replace('#/ISAPI/.*#', '', $this->url);
+        $searchUrl = $baseUrl . '/ISAPI/AccessControl/UserInfo/Search?format=json';
+
+        $payload = [
+            "UserInfoSearchCond" => [
+                "searchID" => "sync_" . uniqid(),
+                "searchResultPosition" => 0,
+                "maxResults" => 2000,
+                "EmployeeNoList" => []
+            ]
+        ];
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $searchUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_USERPWD, "{$this->usuario}:{$this->password}");
+        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_DIGEST);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        
+        $response = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($status >= 200 && $status < 300 && $response) {
+            $data = json_decode($response, true);
+            $empleados = [];
+            
+            if (isset($data['UserInfoSearch']['UserInfo'])) {
+                $usersInfo = $data['UserInfoSearch']['UserInfo'];
+                foreach ($usersInfo as $u) {
+                    $empNo = $u['employeeNo'] ?? '';
+                    $name = $u['name'] ?? '';
+                    $activo = isset($u['Valid']['enable']) ? (bool)$u['Valid']['enable'] : true;
+                    
+                    if ($empNo !== '') {
+                        $empleados[] = [
+                            'employeeNo' => $empNo,
+                            'nombre' => $name,
+                            'activo' => $activo
+                        ];
+                    }
+                }
+            }
+            return $empleados;
+        }
+
+        throw new \Exception("Error al consultar empleados del biométrico (HTTP $status)");
     }
 }

@@ -314,4 +314,30 @@ class SqliteAsistenciaRepositorio implements AsistenciaRepositorio
             } catch (\Exception $e) {}
         }
     }
+
+    public function sincronizarEmpleadosConfig(array $empleados): void
+    {
+        $this->pdo->beginTransaction();
+        try {
+            $sqlConf = "INSERT INTO empleados_config (employeeNo, nombre, activo) 
+                        VALUES (:employeeNo, :nombre, :activo)
+                        ON CONFLICT(employeeNo) DO UPDATE SET 
+                        nombre = excluded.nombre, activo = excluded.activo";
+            
+            $stmtConf = $this->pdo->prepare($sqlConf);
+            
+            foreach ($empleados as $emp) {
+                $stmtConf->execute([
+                    ':employeeNo' => $emp['employeeNo'],
+                    ':nombre' => $emp['nombre'],
+                    ':activo' => $emp['activo'] ? 1 : 0
+                ]);
+            }
+            
+            $this->pdo->commit();
+        } catch (\Exception $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
 }

@@ -123,6 +123,12 @@ class Router
             return;
         }
 
+        // Ruta para sincronizar masivamente todo el personal
+        if ($method === 'POST' && $path === '/api/empleado/sincronizar') {
+            $this->controller->sincronizarPersonal();
+            return;
+        }
+
         // Ruta de bienvenida básica
         if ($method === 'GET' && $path === '/') {
             header('Content-Type: application/json; charset=utf-8');
