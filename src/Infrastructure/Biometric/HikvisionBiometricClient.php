@@ -217,4 +217,44 @@ class HikvisionBiometricClient implements ClienteBiometrico
 
         return $status >= 200 && $status < 300;
     }
+
+    public function modificarEstadoEmpleado(string $employeeNo, string $nombre, bool $activo): bool
+    {
+        if ($this->simular) {
+            return true;
+        }
+
+        $baseUrl = preg_replace('#/ISAPI/.*#', '', $this->url);
+        $modifyUrl = $baseUrl . '/ISAPI/AccessControl/UserInfo/Modify?format=json';
+
+        $payload = [
+            "UserInfo" => [
+                "employeeNo" => $employeeNo,
+                "name" => $nombre,
+                "userType" => "normal",
+                "Valid" => [
+                    "enable" => $activo,
+                    "beginTime" => "2010-01-01T00:00:00",
+                    "endTime" => "2037-12-31T23:59:59",
+                    "timeType" => "local"
+                ]
+            ]
+        ];
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $modifyUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_USERPWD, "{$this->usuario}:{$this->password}");
+        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_DIGEST);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        
+        $response = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return $status >= 200 && $status < 300;
+    }
 }

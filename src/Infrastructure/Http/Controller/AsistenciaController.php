@@ -7,6 +7,7 @@ use App\Application\UseCase\SincronizarAsistenciasUseCase;
 use App\Application\UseCase\ExportarExcelUseCase;
 use App\Application\UseCase\BuscarAsistenciasUseCase;
 use App\Domain\Model\Asistencia\AsistenciaRepositorio;
+use App\Infrastructure\Biometric\HikvisionBiometricClient;
 
 /**
  * Controlador HTTP para gestionar las peticiones de asistencia.
@@ -18,7 +19,8 @@ class AsistenciaController
         private SincronizarAsistenciasUseCase $sincronizarUseCase,
         private ExportarExcelUseCase $exportarUseCase,
         private BuscarAsistenciasUseCase $buscarUseCase,
-        private AsistenciaRepositorio $repositorio
+        private AsistenciaRepositorio $repositorio,
+        private $clienteBiometrico
     ) {}
 
     /**
@@ -310,6 +312,38 @@ class AsistenciaController
             ]);
         } catch (\Exception $e) {
             $this->jsonResponse(500, ['error' => 'Error de conexión o guardado: ' . $e->getMessage()]);
+        }
+    }
+
+    public function actualizarEstadoEmpleado(array $params, array $body): void
+    {
+        $id = $params['id'] ?? null;
+        $nombre = $body['nombre'] ?? '';
+        $activo = isset($body['activo']) ? (bool)$body['activo'] : true;
+
+        if (!$id) {
+            $this->jsonResponse(400, ['error' => 'Falta el ID del empleado.']);
+            return;
+        }
+
+        try {
+            // 1. Actualizar estado en el biométrico (Deshabilitar/Habilitar)
+            $ok = $this->clienteBiometrico->modificarEstadoEmpleado((string)$id, $nombre, $activo);
+            if (!$ok) {
+                $this->jsonResponse(500, ['error' => 'El dispositivo biométrico rechazó el cambio de estado.']);
+                return;
+            }
+
+            // 2. Guardar estado en base de datos local
+            $this->repositorio->actualizarEstadoEmpleadoConfig((string)$id, $activo ? 1 : 0);
+
+            $this->jsonResponse(200, [
+                'mensaje' => $activo ? 'Empleado habilitado correctamente.' : 'Empleado deshabilitado correctamente.',
+                'employeeNo' => $id,
+                'activo' => $activo
+            ]);
+        } catch (\Exception $e) {
+            $this->jsonResponse(500, ['error' => 'Error al cambiar estado: ' . $e->getMessage()]);
         }
     }
 }

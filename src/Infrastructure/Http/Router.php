@@ -115,6 +115,14 @@ class Router
             return;
         }
 
+        // Ruta para deshabilitar/habilitar empleado
+        if ($method === 'PUT' && preg_match('#^/api/empleado/([^/]+)/estado$#', $path, $matches)) {
+            $id = $matches[1];
+            $bodyJson = json_decode(file_get_contents('php://input'), true) ?? [];
+            $this->controller->actualizarEstadoEmpleado(['id' => $id], $bodyJson);
+            return;
+        }
+
         // Ruta de bienvenida básica
         if ($method === 'GET' && $path === '/') {
             header('Content-Type: application/json; charset=utf-8');

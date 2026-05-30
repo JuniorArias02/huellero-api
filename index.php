@@ -48,7 +48,7 @@ $exportarUseCase = new ExportarExcelUseCase($repositorio);
 $buscarUseCase = new BuscarAsistenciasUseCase($repositorio);
 
 // 5. Instanciar Controlador HTTP
-$controller = new AsistenciaController($listarUseCase, $sincronizarUseCase, $exportarUseCase, $buscarUseCase, $repositorio);
+$controller = new AsistenciaController($listarUseCase, $sincronizarUseCase, $exportarUseCase, $buscarUseCase, $repositorio, $clienteBiometrico);
 
 // 6. Enrutar la petición
 $router = new Router($controller);

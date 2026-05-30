@@ -70,6 +70,12 @@ class SqliteAsistenciaRepositorio implements AsistenciaRepositorio
             jornadas TEXT
         )");
 
+        try {
+            $this->pdo->exec("ALTER TABLE empleados_config ADD COLUMN activo INTEGER DEFAULT 1");
+        } catch (\PDOException $e) {
+            // Ignorar si ya existe
+        }
+
         // Configuración por defecto: Lunes a Sábado (1 a 6)
         $this->pdo->exec("INSERT OR IGNORE INTO configuracion (clave, valor) VALUES ('dias_laborables', '1,2,3,4,5,6')");
         $this->pdo->exec("INSERT OR IGNORE INTO configuracion (clave, valor) VALUES ('tolerancia_minutos', '20')");
@@ -222,10 +228,10 @@ class SqliteAsistenciaRepositorio implements AsistenciaRepositorio
 
     public function obtenerEmpleadosConfig(): array
     {
-        $sql = "SELECT employeeNo, nombre, dias_laborables, jornadas
+        $sql = "SELECT employeeNo, nombre, dias_laborables, jornadas, activo
                 FROM empleados_config
                 UNION
-                SELECT a.employeeNo, a.nombre, NULL as dias_laborables, NULL as jornadas
+                SELECT a.employeeNo, a.nombre, NULL as dias_laborables, NULL as jornadas, 1 as activo
                 FROM asistencias a
                 WHERE a.employeeNo NOT IN (SELECT employeeNo FROM empleados_config)
                   AND a.employeeNo IS NOT NULL AND a.employeeNo != ''
@@ -291,5 +297,21 @@ class SqliteAsistenciaRepositorio implements AsistenciaRepositorio
                     ON CONFLICT(employeeNo) DO UPDATE SET nombre = excluded.nombre";
         $stmtConf = $this->pdo->prepare($sqlConf);
         $stmtConf->execute([':employeeNo' => $employeeNo, ':nombre' => $nuevoNombre]);
+    }
+
+    public function actualizarEstadoEmpleadoConfig(string $employeeNo, int $activo): void
+    {
+        $sqlConf = "UPDATE empleados_config SET activo = :activo WHERE employeeNo = :employeeNo";
+        $stmtConf = $this->pdo->prepare($sqlConf);
+        $stmtConf->execute([':employeeNo' => $employeeNo, ':activo' => $activo]);
+        
+        // Si el empleado no estaba en config, lo insertamos
+        if ($stmtConf->rowCount() === 0) {
+            $sqlInsert = "INSERT INTO empleados_config (employeeNo, activo) VALUES (:employeeNo, :activo)";
+            $stmtInsert = $this->pdo->prepare($sqlInsert);
+            try {
+                $stmtInsert->execute([':employeeNo' => $employeeNo, ':activo' => $activo]);
+            } catch (\Exception $e) {}
+        }
     }
 }
