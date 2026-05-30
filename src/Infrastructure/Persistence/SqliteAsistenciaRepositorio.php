@@ -278,4 +278,18 @@ class SqliteAsistenciaRepositorio implements AsistenciaRepositorio
             throw $e;
         }
     }
+
+    public function actualizarNombreEmpleadoConfig(string $employeeNo, string $nuevoNombre): void
+    {
+        // Actualizamos en asistencias (histórico)
+        $sqlAsist = "UPDATE asistencias SET nombre = :nombre WHERE employeeNo = :employeeNo";
+        $stmtAsist = $this->pdo->prepare($sqlAsist);
+        $stmtAsist->execute([':nombre' => $nuevoNombre, ':employeeNo' => $employeeNo]);
+
+        // Aseguramos que se actualice o se inserte en empleados_config
+        $sqlConf = "INSERT INTO empleados_config (employeeNo, nombre) VALUES (:employeeNo, :nombre)
+                    ON CONFLICT(employeeNo) DO UPDATE SET nombre = excluded.nombre";
+        $stmtConf = $this->pdo->prepare($sqlConf);
+        $stmtConf->execute([':employeeNo' => $employeeNo, ':nombre' => $nuevoNombre]);
+    }
 }

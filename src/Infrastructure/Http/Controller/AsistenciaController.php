@@ -208,8 +208,7 @@ class AsistenciaController
         $fotoPath = $fotosDir . '/' . basename($employeeNo) . '.jpg';
 
         if (!file_exists($fotoPath)) {
-            http_response_code(404);
-            echo "No se encontró fotografía local";
+            http_response_code(204); // No Content: evita errores rojos en consola
             return;
         }
 
@@ -247,9 +246,70 @@ class AsistenciaController
 
         // Si suben un PNG/WEBP, idealmente lo convertiríamos, pero mover el archivo base funcionará en navegadores modernos.
         if (move_uploaded_file($fotoOcupada['tmp_name'], $fotoPath)) {
-            $this->enviarRespuesta(200, ['mensaje' => 'Foto subida exitosamente', 'ruta' => "/api/empleado/{$employeeNo}/foto"]);
+            $this->jsonResponse(200, ['mensaje' => 'Foto subida exitosamente', 'ruta' => "/api/empleado/{$employeeNo}/foto"]);
         } else {
-            $this->enviarRespuesta(500, ['error' => 'Error al guardar la imagen en el servidor']);
+            $this->jsonResponse(500, ['error' => 'Error al guardar la imagen en el servidor']);
+        }
+    }
+
+    public function refresh(): void
+    {
+        $headers = function_exists('getallheaders') ? getallheaders() : [];
+        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        $token = '';
+        
+        if (str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+        } elseif (isset($_GET['token'])) {
+            $token = $_GET['token'];
+        }
+
+        $payload = \App\Infrastructure\Config\TokenService::verificar($token);
+        if (!$payload) {
+            $this->jsonResponse(401, ['error' => 'Token inválido o expirado.']);
+            return;
+        }
+
+        // Generar un nuevo token fresco de 30 minutos
+        $nuevoToken = \App\Infrastructure\Config\TokenService::generar([
+            'username' => $payload['username'] ?? 'admin',
+            'rol' => $payload['rol'] ?? 'administrador'
+        ]);
+
+        $this->jsonResponse(200, [
+            'token' => $nuevoToken,
+            'username' => $payload['username'] ?? 'admin'
+        ]);
+    }
+
+    public function actualizarNombreEmpleado(array $params, array $body): void
+    {
+        $id = $params['id'] ?? null;
+        $nuevoNombre = trim($body['nombre'] ?? '');
+
+        if (!$id || $nuevoNombre === '') {
+            $this->jsonResponse(400, ['error' => 'Falta el ID o el nuevo nombre.']);
+            return;
+        }
+
+        try {
+            // 1. Actualizar el biométrico
+            $ok = $this->clienteBiometrico->modificarNombreEmpleado((string)$id, $nuevoNombre);
+            if (!$ok) {
+                $this->jsonResponse(500, ['error' => 'El dispositivo biométrico rechazó la actualización del nombre.']);
+                return;
+            }
+
+            // 2. Actualizar la base de datos local
+            $this->repositorio->actualizarNombreEmpleadoConfig((string)$id, $nuevoNombre);
+
+            $this->jsonResponse(200, [
+                'mensaje' => 'Nombre actualizado con éxito en dispositivo y BD local.',
+                'employeeNo' => $id,
+                'nombre' => $nuevoNombre
+            ]);
+        } catch (\Exception $e) {
+            $this->jsonResponse(500, ['error' => 'Error de conexión o guardado: ' . $e->getMessage()]);
         }
     }
 }

@@ -47,6 +47,13 @@ class Router
             return;
         }
 
+        // Refresco de token (también protegido, pero procesado antes del filtro general para no duplicar lógica)
+        if ($method === 'POST' && $path === '/api/refresh') {
+            $this->validarAutorizacion();
+            $this->controller->refresh();
+            return;
+        }
+
         // Rutas del API - Protegidas con Token Bearer
         if (str_starts_with($path, '/api/')) {
             $this->validarAutorizacion();
@@ -100,6 +107,14 @@ class Router
             return;
         }
 
+        // Ruta para actualizar nombre del empleado
+        if ($method === 'PUT' && preg_match('#^/api/empleado/([^/]+)/nombre$#', $path, $matches)) {
+            $id = $matches[1];
+            $bodyJson = json_decode(file_get_contents('php://input'), true) ?? [];
+            $this->controller->actualizarNombreEmpleado(['id' => $id], $bodyJson);
+            return;
+        }
+
         // Ruta de bienvenida básica
         if ($method === 'GET' && $path === '/') {
             header('Content-Type: application/json; charset=utf-8');
@@ -132,7 +147,7 @@ class Router
     private function manejarCors(): void
     {
         header('Access-Control-Allow-Origin: *');
-        header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+        header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
         header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
     }
 

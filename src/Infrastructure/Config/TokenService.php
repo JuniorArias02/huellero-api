@@ -15,7 +15,7 @@ class TokenService
     /**
      * Genera un token JWT firmado.
      */
-    public static function generar(array $payload, int $expiracionSegundos = 86400): string
+    public static function generar(array $payload, int $expiracionSegundos = 1800): string
     {
         $payload['iat'] = time();
         $payload['exp'] = time() + $expiracionSegundos;
