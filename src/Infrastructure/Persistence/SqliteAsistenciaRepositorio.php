@@ -73,6 +73,7 @@ class SqliteAsistenciaRepositorio implements AsistenciaRepositorio
         // Configuración por defecto: Lunes a Sábado (1 a 6)
         $this->pdo->exec("INSERT OR IGNORE INTO configuracion (clave, valor) VALUES ('dias_laborables', '1,2,3,4,5,6')");
         $this->pdo->exec("INSERT OR IGNORE INTO configuracion (clave, valor) VALUES ('tolerancia_minutos', '20')");
+        $this->pdo->exec("INSERT OR IGNORE INTO configuracion (clave, valor) VALUES ('tolerancia_extra_minutos', '20')");
         
         // Jornadas por defecto (Mañana, Tarde, y una Noche inactiva como ejemplo)
         $jornadasDefecto = json_encode([
@@ -180,12 +181,15 @@ class SqliteAsistenciaRepositorio implements AsistenciaRepositorio
         $config = [
             'dias_laborables' => [1,2,3,4,5,6], // array nativo
             'tolerancia_minutos' => 20,
+            'tolerancia_extra_minutos' => 20,
             'jornadas' => []
         ];
         
         foreach ($filas as $fila) {
             if ($fila['clave'] === 'tolerancia_minutos') {
                 $config['tolerancia_minutos'] = (int)$fila['valor'];
+            } elseif ($fila['clave'] === 'tolerancia_extra_minutos') {
+                $config['tolerancia_extra_minutos'] = (int)$fila['valor'];
             } elseif ($fila['clave'] === 'dias_laborables') {
                 $config['dias_laborables'] = array_map('intval', explode(',', $fila['valor']));
             } elseif ($fila['clave'] === 'jornadas') {
@@ -207,6 +211,9 @@ class SqliteAsistenciaRepositorio implements AsistenciaRepositorio
         if (isset($configData['tolerancia_minutos'])) {
             $stmt->execute([':clave' => 'tolerancia_minutos', ':valor' => (string)$configData['tolerancia_minutos']]);
         }
+        if (isset($configData['tolerancia_extra_minutos'])) {
+            $stmt->execute([':clave' => 'tolerancia_extra_minutos', ':valor' => (string)$configData['tolerancia_extra_minutos']]);
+        }
         if (isset($configData['jornadas'])) {
             $jornadas = is_array($configData['jornadas']) ? json_encode($configData['jornadas']) : $configData['jornadas'];
             $stmt->execute([':clave' => 'jornadas', ':valor' => $jornadas]);
@@ -215,11 +222,14 @@ class SqliteAsistenciaRepositorio implements AsistenciaRepositorio
 
     public function obtenerEmpleadosConfig(): array
     {
-        $sql = "SELECT DISTINCT a.employeeNo, a.nombre, ec.dias_laborables, ec.jornadas 
-                FROM asistencias a 
-                LEFT JOIN empleados_config ec ON a.employeeNo = ec.employeeNo
-                WHERE a.employeeNo IS NOT NULL AND a.employeeNo != ''
-                ORDER BY a.nombre ASC";
+        $sql = "SELECT employeeNo, nombre, dias_laborables, jornadas
+                FROM empleados_config
+                UNION
+                SELECT a.employeeNo, a.nombre, NULL as dias_laborables, NULL as jornadas
+                FROM asistencias a
+                WHERE a.employeeNo NOT IN (SELECT employeeNo FROM empleados_config)
+                  AND a.employeeNo IS NOT NULL AND a.employeeNo != ''
+                ORDER BY nombre ASC";
                 
         $stmt = $this->pdo->query($sql);
         $resultados = $stmt->fetchAll(\PDO::FETCH_ASSOC);
@@ -252,18 +262,15 @@ class SqliteAsistenciaRepositorio implements AsistenciaRepositorio
             $stmt = $this->pdo->prepare($sql);
             
             foreach ($empleados as $emp) {
-                // Solo insertamos si tiene alguna customización
-                if (!empty($emp['dias_laborables']) || !empty($emp['jornadas'])) {
-                    $dias = is_array($emp['dias_laborables']) ? implode(',', $emp['dias_laborables']) : null;
-                    $jornadas = is_array($emp['jornadas']) ? json_encode($emp['jornadas']) : null;
-                    
-                    $stmt->execute([
-                        ':employeeNo' => $emp['employeeNo'],
-                        ':nombre' => $emp['nombre'] ?? '',
-                        ':dias' => $dias,
-                        ':jornadas' => $jornadas
-                    ]);
-                }
+                $dias = !empty($emp['dias_laborables']) && is_array($emp['dias_laborables']) ? implode(',', $emp['dias_laborables']) : null;
+                $jornadas = !empty($emp['jornadas']) && is_array($emp['jornadas']) ? json_encode($emp['jornadas']) : null;
+                
+                $stmt->execute([
+                    ':employeeNo' => $emp['employeeNo'],
+                    ':nombre' => $emp['nombre'] ?? '',
+                    ':dias' => $dias,
+                    ':jornadas' => $jornadas
+                ]);
             }
             $this->pdo->commit();
         } catch (\Exception $e) {

@@ -10,6 +10,10 @@ data/*.sqlite
 data/*.db
 !data/.htaccess
 
+# Excluir las fotografías subidas localmente pero mantener la estructura de la carpeta
+data/fotos/*
+!data/fotos/.gitkeep
+
 # Logs
 *.log
 

@@ -204,28 +204,52 @@ class AsistenciaController
             return;
         }
 
-        $biometricUrl = getenv('BIOMETRIC_URL') ?: 'http://190.145.135.122:8547/ISAPI/AccessControl/AcsEvent?format=json';
-        $biometricUser = \App\Infrastructure\Config\CryptoHelper::desencriptar(getenv('BIOMETRIC_USER') ?: 'admin');
-        $biometricPass = \App\Infrastructure\Config\CryptoHelper::desencriptar(getenv('BIOMETRIC_PASS') ?: '900752620ch*');
-        $simulate = (getenv('BIOMETRIC_SIMULATE') === 'true' || getenv('BIOMETRIC_SIMULATE') === '1');
+        $fotosDir = __DIR__ . '/../../../../data/fotos';
+        $fotoPath = $fotosDir . '/' . basename($employeeNo) . '.jpg';
 
-        if ($simulate) {
+        if (!file_exists($fotoPath)) {
             http_response_code(404);
+            echo "No se encontró fotografía local";
             return;
         }
 
-        $cliente = new \App\Infrastructure\Biometric\HikvisionBiometricClient($biometricUrl, $biometricUser, $biometricPass);
-        $fotoBinaria = $cliente->obtenerFotoEmpleado($employeeNo);
-
-        if (!$fotoBinaria) {
-            http_response_code(404);
-            echo "No se encontró fotografía en el biométrico";
-            return;
-        }
-
-        header("Cache-Control: private, max-age=86400");
+        header("Cache-Control: public, max-age=86400");
         header("Content-Type: image/jpeg");
-        header("Content-Length: " . strlen($fotoBinaria));
-        echo $fotoBinaria;
+        header("Content-Length: " . filesize($fotoPath));
+        readfile($fotoPath);
+    }
+
+    public function uploadFoto(array $vars): void
+    {
+        $employeeNo = $vars['id'] ?? '';
+        if (empty($employeeNo) || !isset($_FILES['foto'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Falta el ID del empleado o el archivo de foto']);
+            return;
+        }
+
+        $fotosDir = __DIR__ . '/../../../../data/fotos';
+        if (!is_dir($fotosDir)) {
+            mkdir($fotosDir, 0755, true);
+        }
+
+        $fotoOcupada = $_FILES['foto'];
+        $extension = strtolower(pathinfo($fotoOcupada['name'], PATHINFO_EXTENSION));
+        
+        // Solo aceptamos imágenes
+        if (!in_array($extension, ['jpg', 'jpeg', 'png', 'webp'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Formato de imagen no válido. Usa JPG o PNG.']);
+            return;
+        }
+
+        $fotoPath = $fotosDir . '/' . basename($employeeNo) . '.jpg'; // Siempre guardamos como jpg por simplicidad
+
+        // Si suben un PNG/WEBP, idealmente lo convertiríamos, pero mover el archivo base funcionará en navegadores modernos.
+        if (move_uploaded_file($fotoOcupada['tmp_name'], $fotoPath)) {
+            $this->enviarRespuesta(200, ['mensaje' => 'Foto subida exitosamente', 'ruta' => "/api/empleado/{$employeeNo}/foto"]);
+        } else {
+            $this->enviarRespuesta(500, ['error' => 'Error al guardar la imagen en el servidor']);
+        }
     }
 }

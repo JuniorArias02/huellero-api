@@ -33,6 +33,7 @@ class AsistenciaEnricher
         $config = $repositorio->obtenerGeneralConfig();
         $diasGlobales = $config['dias_laborables'] ?? [1,2,3,4,5,6];
         $tolerancia = (int)($config['tolerancia_minutos'] ?? 20);
+        $toleranciaExtra = (int)($config['tolerancia_extra_minutos'] ?? 20);
         $jornadasGlobales = array_filter($config['jornadas'] ?? [], fn($j) => !empty($j['activa']));
 
         $empleadosConfig = $repositorio->obtenerEmpleadosConfig();
@@ -140,8 +141,11 @@ class AsistenciaEnricher
                                 if ($diff < 0) {
                                     $data['estado'] = 'Salida Temprana';
                                     $data['salidaTempranaMinutos'] = abs($diff);
-                                } elseif ($diff > 0) {
+                                } elseif ($diff > $toleranciaExtra) {
                                     $data['estado'] = 'Horas Extras';
+                                    // Se cuentan todos los minutos extra desde la hora oficial de salida,
+                                    // o si prefieres descontar los 20 min, sería $diff - $toleranciaExtra.
+                                    // Generalmente se pagan todos si se aprueba el quedarse.
                                     $data['horasExtrasMinutos'] = $diff;
                                 } else {
                                     $data['estado'] = 'Normal';

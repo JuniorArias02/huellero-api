@@ -93,6 +93,13 @@ class Router
             return;
         }
 
+        // Ruta para cargar fotografías locales
+        if ($method === 'POST' && preg_match('#^/api/empleado/([^/]+)/foto$#', $path, $matches)) {
+            $id = $matches[1];
+            $this->controller->uploadFoto(['id' => $id]);
+            return;
+        }
+
         // Ruta de bienvenida básica
         if ($method === 'GET' && $path === '/') {
             header('Content-Type: application/json; charset=utf-8');
