@@ -88,8 +88,9 @@ class AsistenciaEnricher
                         $diaSemanaMarcacion = (int)(new \DateTime($fechaHora))->format('N');
                         
                         // Filtrar solo las jornadas que aplican a este día de la semana
-                        $jornadasDelDia = array_filter($jornadas, function($j) use ($diaSemanaMarcacion) {
-                            $dias = $j['dias'] ?? [1,2,3,4,5,6]; // Fallback por seguridad
+                        $diasLaborablesEmp = $empleadosMap[$empNo]['dias_laborables'];
+                        $jornadasDelDia = array_filter($jornadas, function($j) use ($diaSemanaMarcacion, $diasLaborablesEmp) {
+                            $dias = $j['dias'] ?? $diasLaborablesEmp; // Usa los días del empleado en lugar del estático
                             return in_array($diaSemanaMarcacion, $dias);
                         });
                         
@@ -176,6 +177,14 @@ class AsistenciaEnricher
 
                 $inasistencias = [];
                 $serialVirtual = -1;
+                $festivosService = new \App\Infrastructure\Service\FestivosColombiaService($repositorio);
+                
+                // Obtener todas las novedades para evitar consultas N+1
+                $novedadesDB = $repositorio->obtenerTodasLasNovedades();
+                $novedadesPorEmp = [];
+                foreach ($novedadesDB as $nov) {
+                    $novedadesPorEmp[$nov['employeeNo']][] = $nov;
+                }
 
                 foreach ($empleadosConfig as $emp) {
                     $empNo = $emp['employeeNo'];
@@ -192,12 +201,19 @@ class AsistenciaEnricher
                     while ($d <= $endDate) {
                         $currStr = $d->format('Y-m-d');
                         if ($currStr < $hoy) {
+                            // Ignorar si el día es festivo nacional en Colombia
+                            if ($festivosService->esFestivo($currStr)) {
+                                $d->modify('+1 day');
+                                continue;
+                            }
+
                             $diaSemana = (int)$d->format('N'); // 1=Lunes, 7=Domingo
                             
                             // Verificar si el empleado tiene al menos un turno activo en este día de la semana
                             $tieneTurno = false;
+                            $diasLaborablesEmp = $empleadosMap[$empNo]['dias_laborables'];
                             foreach ($jornadasEmp as $j) {
-                                $diasValidos = $j['dias'] ?? [1,2,3,4,5,6];
+                                $diasValidos = $j['dias'] ?? $diasLaborablesEmp;
                                 if (in_array($diaSemana, $diasValidos)) {
                                     $tieneTurno = true;
                                     break;
@@ -206,6 +222,17 @@ class AsistenciaEnricher
                             
                             if ($tieneTurno) {
                                 if (!isset($asistenciasExistentes[$empNo][$currStr])) {
+                                    // Verificar si el empleado tiene una novedad (Vacaciones, Permiso, etc.) en este día
+                                    $tipoNovedad = null;
+                                    if (isset($novedadesPorEmp[$empNo])) {
+                                        foreach ($novedadesPorEmp[$empNo] as $nov) {
+                                            if ($currStr >= $nov['fechaInicio'] && $currStr <= $nov['fechaFin']) {
+                                                $tipoNovedad = $nov['tipo']; // Ej: 'Vacaciones', 'Incapacidad'
+                                                break;
+                                            }
+                                        }
+                                    }
+
                                     $inasistencias[] = [
                                         'serialNo' => $serialVirtual--,
                                         'employeeNo' => $empNo,
@@ -217,8 +244,8 @@ class AsistenciaEnricher
                                         'major' => 0,
                                         'minor' => 0,
                                         'mascarilla' => 'No',
-                                        'tipoRegistro' => 'Inasistencia',
-                                        'estado' => 'Falta',
+                                        'tipoRegistro' => $tipoNovedad ? 'Novedad' : 'Inasistencia',
+                                        'estado' => $tipoNovedad ?: 'Falta',
                                         'retrasoMinutos' => 0,
                                         'horasExtrasMinutos' => 0,
                                         'salidaTempranaMinutos' => 0,

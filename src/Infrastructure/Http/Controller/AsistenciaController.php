@@ -360,4 +360,58 @@ class AsistenciaController
             $this->jsonResponse(500, ['error' => 'Error Crítico del Servidor: ' . $e->getMessage() . ' en la línea ' . $e->getLine() . ' de ' . basename($e->getFile())]);
         }
     }
+
+    public function obtenerNovedades(array $params): void
+    {
+        $id = $params['id'] ?? null;
+        try {
+            if ($id) {
+                $novedades = $this->repositorio->obtenerNovedadesEmpleado((string)$id);
+            } else {
+                $novedades = $this->repositorio->obtenerTodasLasNovedades();
+            }
+            $this->jsonResponse(200, $novedades);
+        } catch (\Exception $e) {
+            $this->jsonResponse(500, ['error' => 'Error al obtener novedades: ' . $e->getMessage()]);
+        }
+    }
+
+    public function guardarNovedad(array $params, array $body): void
+    {
+        $id = $params['id'] ?? null;
+        if (!$id || empty($body['fechaInicio']) || empty($body['fechaFin'])) {
+            $this->jsonResponse(400, ['error' => 'Datos incompletos para la novedad']);
+            return;
+        }
+        
+        try {
+            $novedad = [
+                'employeeNo' => $id,
+                'tipo' => $body['tipo'] ?? 'Vacaciones',
+                'fechaInicio' => $body['fechaInicio'],
+                'fechaFin' => $body['fechaFin'],
+                'observacion' => $body['observacion'] ?? ''
+            ];
+            $this->repositorio->guardarNovedad($novedad);
+            $this->jsonResponse(200, ['mensaje' => 'Novedad guardada exitosamente']);
+        } catch (\Exception $e) {
+            $this->jsonResponse(500, ['error' => 'Error al guardar novedad: ' . $e->getMessage()]);
+        }
+    }
+
+    public function eliminarNovedad(array $params): void
+    {
+        $novedadId = $params['novedadId'] ?? null;
+        if (!$novedadId) {
+            $this->jsonResponse(400, ['error' => 'ID de novedad requerido']);
+            return;
+        }
+
+        try {
+            $this->repositorio->eliminarNovedad((int)$novedadId);
+            $this->jsonResponse(200, ['mensaje' => 'Novedad eliminada']);
+        } catch (\Exception $e) {
+            $this->jsonResponse(500, ['error' => 'Error al eliminar novedad: ' . $e->getMessage()]);
+        }
+    }
 }

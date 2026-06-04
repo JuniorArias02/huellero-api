@@ -70,6 +70,20 @@ class SqliteAsistenciaRepositorio implements AsistenciaRepositorio
             jornadas TEXT
         )");
 
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS festivos (
+            fecha TEXT PRIMARY KEY,
+            nombre TEXT
+        )");
+
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS empleados_novedades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employeeNo TEXT,
+            tipo TEXT,
+            fechaInicio TEXT,
+            fechaFin TEXT,
+            observacion TEXT
+        )");
+
         try {
             $this->pdo->exec("ALTER TABLE empleados_config ADD COLUMN activo INTEGER DEFAULT 1");
         } catch (\PDOException $e) {
@@ -92,7 +106,7 @@ class SqliteAsistenciaRepositorio implements AsistenciaRepositorio
 
     public function guardar(RegistroAsistencia $registro): void
     {
-        $sql = "INSERT OR REPLACE INTO asistencias (
+        $sql = "INSERT OR IGNORE INTO asistencias (
             serialNo, employeeNo, nombre, fechaHora, modoVerificacion, lectorNo, puertaNo, major, minor, mascarilla
         ) VALUES (
             :serialNo, :employeeNo, :nombre, :fechaHora, :modoVerificacion, :lectorNo, :puertaNo, :major, :minor, :mascarilla
@@ -107,7 +121,7 @@ class SqliteAsistenciaRepositorio implements AsistenciaRepositorio
         if (empty($registros)) return;
         $this->pdo->beginTransaction();
         try {
-            $sql = "INSERT OR REPLACE INTO asistencias (
+            $sql = "INSERT OR IGNORE INTO asistencias (
                 serialNo, employeeNo, nombre, fechaHora, modoVerificacion, lectorNo, puertaNo, major, minor, mascarilla
             ) VALUES (
                 :serialNo, :employeeNo, :nombre, :fechaHora, :modoVerificacion, :lectorNo, :puertaNo, :major, :minor, :mascarilla
@@ -177,6 +191,14 @@ class SqliteAsistenciaRepositorio implements AsistenciaRepositorio
         $stmt = $this->pdo->query($sql);
         $res = $stmt->fetch();
         return (int)($res['max_serial'] ?? 0);
+    }
+
+    public function obtenerUltimaFechaSincronizada(): ?string
+    {
+        $sql = "SELECT MAX(fechaHora) as max_fecha FROM asistencias";
+        $stmt = $this->pdo->query($sql);
+        $res = $stmt->fetch();
+        return $res['max_fecha'] ?? null;
     }
 
     public function obtenerGeneralConfig(): array
@@ -339,5 +361,69 @@ class SqliteAsistenciaRepositorio implements AsistenciaRepositorio
             $this->pdo->rollBack();
             throw $e;
         }
+    }
+
+    public function obtenerFestivos(string $year): array
+    {
+        $sql = "SELECT fecha, nombre FROM festivos WHERE fecha LIKE :year";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':year' => $year . '-%']);
+        $resultados = $stmt->fetchAll();
+        $festivos = [];
+        foreach ($resultados as $row) {
+            $festivos[$row['fecha']] = $row['nombre'];
+        }
+        return $festivos;
+    }
+
+    public function guardarFestivos(string $year, array $festivos): void
+    {
+        $this->pdo->beginTransaction();
+        try {
+            $sql = "INSERT OR IGNORE INTO festivos (fecha, nombre) VALUES (:fecha, :nombre)";
+            $stmt = $this->pdo->prepare($sql);
+            foreach ($festivos as $fecha => $nombre) {
+                $stmt->execute([':fecha' => $fecha, ':nombre' => $nombre]);
+            }
+            $this->pdo->commit();
+        } catch (\Exception $e) {
+            $this->pdo->rollBack();
+        }
+    }
+
+    public function obtenerTodasLasNovedades(): array
+    {
+        $sql = "SELECT id, employeeNo, tipo, fechaInicio, fechaFin, observacion FROM empleados_novedades ORDER BY fechaInicio DESC";
+        $stmt = $this->pdo->query($sql);
+        return $stmt->fetchAll();
+    }
+
+    public function obtenerNovedadesEmpleado(string $employeeNo): array
+    {
+        $sql = "SELECT id, employeeNo, tipo, fechaInicio, fechaFin, observacion FROM empleados_novedades WHERE employeeNo = :empNo ORDER BY fechaInicio DESC";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':empNo' => $employeeNo]);
+        return $stmt->fetchAll();
+    }
+
+    public function guardarNovedad(array $novedad): void
+    {
+        $sql = "INSERT INTO empleados_novedades (employeeNo, tipo, fechaInicio, fechaFin, observacion) 
+                VALUES (:employeeNo, :tipo, :fechaInicio, :fechaFin, :observacion)";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([
+            ':employeeNo' => $novedad['employeeNo'],
+            ':tipo' => $novedad['tipo'] ?? 'Vacaciones',
+            ':fechaInicio' => $novedad['fechaInicio'],
+            ':fechaFin' => $novedad['fechaFin'],
+            ':observacion' => $novedad['observacion'] ?? ''
+        ]);
+    }
+
+    public function eliminarNovedad(int $id): void
+    {
+        $sql = "DELETE FROM empleados_novedades WHERE id = :id";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':id' => $id]);
     }
 }

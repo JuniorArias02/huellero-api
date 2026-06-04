@@ -30,6 +30,11 @@ interface AsistenciaRepositorio
     public function obtenerUltimoSerial(): int;
 
     /**
+     * Obtiene la fecha y hora del último registro sincronizado.
+     */
+    public function obtenerUltimaFechaSincronizada(): ?string;
+
+    /**
      * Obtiene la configuración general (horarios por defecto y tolerancia).
      */
     public function obtenerGeneralConfig(): array;
@@ -49,4 +54,22 @@ interface AsistenciaRepositorio
      * Guarda las configuraciones personalizadas de horarios para los empleados.
      */
     public function guardarEmpleadosConfig(array $empleados): void;
+
+    /**
+     * Obtiene los días festivos cacheados para un año dado.
+     */
+    public function obtenerFestivos(string $year): array;
+
+    /**
+     * Guarda los días festivos descargados para un año dado.
+     */
+    public function guardarFestivos(string $year, array $festivos): void;
+
+    /**
+     * Novedades de Empleados (Vacaciones, Permisos, Incapacidades)
+     */
+    public function obtenerTodasLasNovedades(): array;
+    public function obtenerNovedadesEmpleado(string $employeeNo): array;
+    public function guardarNovedad(array $novedad): void;
+    public function eliminarNovedad(int $id): void;
 }

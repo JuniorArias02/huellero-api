@@ -25,6 +25,14 @@ class SincronizarAsistenciasUseCase
      */
     public function ejecutar(string $fechaInicio, string $fechaFin): int
     {
+        // Optimizamos obteniendo la última fecha sincronizada para no pedir todo desde el inicio
+        $ultimaFecha = $this->repositorio->obtenerUltimaFechaSincronizada();
+        if ($ultimaFecha && $ultimaFecha > $fechaInicio) {
+            $fechaInicio = $ultimaFecha;
+        }
+
+        $ultimoSerial = $this->repositorio->obtenerUltimoSerial();
+
         $posicionActual = 0;
         $tieneMasDatos = true;
         $totalSincronizados = 0;
@@ -44,7 +52,8 @@ class SincronizarAsistenciasUseCase
                 $registrosAEntidades = [];
                 foreach ($infoList as $item) {
                     $serialNo = $item['serialNo'] ?? null;
-                    if ($serialNo === null) {
+                    // Evitamos procesar y duplicar registros que ya existen en la base de datos local
+                    if ($serialNo === null || (int)$serialNo <= $ultimoSerial) {
                         continue;
                     }
 

@@ -129,6 +129,23 @@ class Router
             return;
         }
 
+        // Rutas para novedades (Vacaciones, Incapacidades, Permisos)
+        if ($method === 'GET' && preg_match('#^/api/empleado/([^/]+)/novedades$#', $path, $matches)) {
+            $this->controller->obtenerNovedades(['id' => $matches[1]]);
+            return;
+        }
+
+        if ($method === 'POST' && preg_match('#^/api/empleado/([^/]+)/novedades$#', $path, $matches)) {
+            $bodyJson = json_decode(file_get_contents('php://input'), true) ?? [];
+            $this->controller->guardarNovedad(['id' => $matches[1]], $bodyJson);
+            return;
+        }
+
+        if ($method === 'DELETE' && preg_match('#^/api/novedades/([^/]+)$#', $path, $matches)) {
+            $this->controller->eliminarNovedad(['novedadId' => $matches[1]]);
+            return;
+        }
+
         // Ruta de bienvenida básica
         if ($method === 'GET' && $path === '/') {
             header('Content-Type: application/json; charset=utf-8');
